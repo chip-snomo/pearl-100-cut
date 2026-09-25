@@ -102,7 +102,9 @@
 
   <footer>
     NYT's original ranking at nytimes.com/bestTV · re-ranked by Pearl 🐚<br>
-    Your ✓ and ♥ save on this device automatically.
+    Your ✓ and ♥ save on this device automatically.<br>
+    <button id="sendBtn" style="margin-top:12px;font-size:13.5px;padding:10px 20px;border-radius:12px;border:1.5px solid var(--gold);background:transparent;color:var(--gold);cursor:pointer;font-weight:600">📤 Send my list to Pearl</button>
+    <div style="font-size:11px;color:var(--dim);margin-top:8px">Tap it, then paste the code in Slack — Pearl re-ranks the board.</div>
   </footer>
 </div>
 <div class="toast" id="toast"></div>
@@ -227,12 +229,15 @@ const SEED = [
 
 // ---------- STATE ----------
 const KEY='pearl100cut';
-const map={}; SEED.forEach((s,i)=>{ s.id='s'+i; map[s.id]=s; });
+const slug=t=>t.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+SEED.forEach((s,i)=>{ s.id=slug(s.t); s.oid='s'+i; });   // stable ids; oid = v1 positional key
 function load(){
   let st=null; try{st=JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){}
   if(!st){ st={}; SEED.forEach(s=>{ if(s.st) st[s.id]=s.st; }); }
-  // dedupe/migrate: ensure ids valid, half kept only for seeds
-  const out={}; SEED.forEach(s=>{ const v=st[s.id]; if(v==='seen'||v==='want'||v==='half') out[s.id]=v; });
+  // migrate v1 positional keys ('s0'..'s99') to stable slugs — v1 order == this file's order
+  const byOid={}; SEED.forEach(s=>byOid[s.oid]=s.id);
+  const mig={}; Object.entries(st||{}).forEach(([k,v])=>{ mig[byOid[k]||k]=v; });
+  const out={}; SEED.forEach(s=>{ const v=mig[s.id]; if(v==='seen'||v==='want'||v==='half') out[s.id]=v; });
   return out;
 }
 function save(){ try{localStorage.setItem(KEY,JSON.stringify(STATUS));}catch(e){} }
@@ -322,6 +327,21 @@ function flash(act){
   t.classList.add('show'); clearTimeout(toastT);
   toastT=setTimeout(()=>t.classList.remove('show'),1200);
 }
+// ---------- SEND TO PEARL ----------
+$('sendBtn').onclick=()=>{
+  // compact export: first letters + slug list. Tiny + human-pasteable.
+  const marks={};
+  Object.entries(STATUS).forEach(([id,v])=>{ (marks[v] ||= []).push(id); });
+  const code = 'TV100:'+btoa(JSON.stringify(marks)).replace(/=+$/,'');
+  const msg='Pearl, here is my TV list code:\n'+code;
+  if(navigator.share){ navigator.share({title:'My TV list for Pearl', text:msg}).catch(()=>{}); }
+  else{
+    navigator.clipboard.writeText(msg)
+      .then(()=>{ toast('📋 Copied — paste it to Pearl in Slack',3000); })
+      .catch(()=>{ prompt('Copy this and send to Pearl in Slack:', msg); });
+  }
+};
+function toast(msg,ms){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),ms||1200); }
 $('sortPearl').onclick=()=>{sortMode='pearl';$('sortPearl').classList.add('on');$('sortNYT').classList.remove('on');render();};
 $('sortNYT').onclick=()=>{sortMode='nyt';$('sortNYT').classList.add('on');$('sortPearl').classList.remove('on');render();};
 render();
